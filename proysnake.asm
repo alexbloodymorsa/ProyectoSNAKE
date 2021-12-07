@@ -76,12 +76,16 @@ status 			db 		0 		;0 stop-pause, 1 activo
 t_inicial 		dw 		0,0
 milisegundos 	dw 		0
 ;temp 			dw 		0
+divisorCol		dw		58d		;Dato para calcular la columna aleatoria del item
+divisorRen		dw 		23d 	;Dato para calcular el renglón aleatorio del item
 
 ;Variables para el juego
 score 			dw 		0
 hi_score	 	dw 		0
 speed 			db 		0
 speed_indicador	dw 		1000
+speed_conta		db 		0 		;contador de items comidos
+cmp_conta 		db 		10      ; comparador para el contador de items comidos
 
 ;Variables para 'head'. Datos de la cabeza de la serpiente
 head_ren		db 		12d 	;Posición del renglón (0-24d)
@@ -314,7 +318,7 @@ mouse:
 	je no_contenido 		;Si el status es 0 no se mueve al jugador
 	call CALCULO_SPEED 		;Se calcula cada cuantos milisegundos se hace un movimiento
 	mov ax,[speed_indicador]
-	cmp milisegundos, ax 	;Mover cadad [speed_indicador] milisegundos
+	cmp milisegundos, ax 	;Mover cada [speed_indicador] milisegundos
 	jbe no_mover 			;No mover a la víbora
 	call MOVER 				;Se mueve a la víbora si ya transcurrieron los milisegundos de [speed_indicador]
 
@@ -901,19 +905,23 @@ salir:				;inicia etiqueta salir
 		cmp [head_dir], 0 					;Se compara para saber si la dirección es cero (derecha)
 		jne izq
 		inc [head_col] 						;Se incrementa uno el valor de la columna
+		call COMER_OBJ
 		jmp cuerpo
 	izq:
 		cmp [head_dir], 2 					;Se compara para saber si la dirección es dos (izquierda)
 		jne arriba
 		dec [head_col] 						;Se decrementa uno el valor de la columna
+		call COMER_OBJ
 		jmp cuerpo
 	arriba:
 		cmp [head_dir], 1 					;Se compara para saber si la dirección es uno (arriba)
 		jne abajo
 		dec [head_ren] 						;Se decrementa uno el valor del renglón
+		call COMER_OBJ
 		jmp cuerpo
 	abajo:									;Si no se cumple ninguna se mueve hacia abajo
 		inc [head_ren]						;Se incrementa uno el valor del renglón
+		call COMER_OBJ
 
 	;Se mueve el cuerpo de la cola. Se recorre el valor de la cola en una posición para que se tenga el valor
 	;de la posición pasada del elemento contiguo
@@ -951,7 +959,84 @@ salir:				;inicia etiqueta salir
 
 		ret
 	endp
+
+	CALCULO_ITEM proc
+	;Se calcula la columna del item 
+		mov ax, 0
+		int 1Ah				;Opción AX=0 de la int 1Ah, obtiene los tics del tiempo del sistema en dx
+		mov ax, dx
+		xor dx, dx			;se cambia el valor de DX a 0 para mo afectar la división
+		div divisorCol		;DX = DX:AX % 58d => se obtiene un valor en DX de 0d a 57d
+		add dl, 21d 		;Se suma 21d a DL para obtener valores de [21d a 78d], que son las columnas disponibles
+		mov [item_col], dl 	;Se actualiza el valor de item_col
+	
+	;Se calcula el renglon del item
+		mov ax, 0
+		int 1Ah				;Opción AX=0 de la int 1Ah, obtiene los tics del tiempo del sistema en dx
+		mov ax, dx			
+		mov dx, 0000h		;se cambia el valor de DX a 0 para mo afectar la división
+		div divisorRen		;DX = DX:AX % 23d => se obtiene un valor en DX de 0d a 22d
+		inc dl 				;Se suma 1d a DL para obtener valores de [1d a 23d], que son los renglones disponibles
+		mov [item_ren], dl 	;Se actualiza el valor de item_ren
+		
+		ret
+	endp
+
+	;Procedimiento en el cual se compara la cabeza con el valor del objeto, comer y reposicionar objeto
+	;Se utilizan las variables de la posición de la cabeza y las variables del objeto
+	COMER_OBJ proc 
+		mov bh, [item_col]	;se guardan los valores de la columna 
+		mov bl, [item_ren]	;y en el renglón del item en ambas partes del registro BX
+		xor bx, ax 			;se utiliza xor para comparar el valor de ax (posición de head) y bx (posicion item)
+		jz llamarITEM 		;si la bandera está encendida (son iguales) se salta a llamarITEM
+		jmp RETU 			;se salta al final en caso de que no se haya comido nada
+	llamarITEM:
+		call CALCULO_ITEM	;se llama el procedimiento que calcula la nueva posicion del item
+		call IMPRIME_ITEM	;se imprime el item en una posición aleatoria
+		;mov tail[conta*2], 12
+		inc [tail_conta]
+		mov bx, [score] 	;se guarda el valor de score en bx para sumarle 10
+		add bx, 10d
+		mov [score], bx  	;se guarda el nuevo valor de score para imprimirlo 
+		call IMPRIME_SCORE  ;se llama el procedimiento que imprime al score
+		mov bx, hi_score	;se mueve el highscore a bx para compararlo
+		cmp bx, [score]		;se comparan ambos 
+		ja HISCORE 			;si score es mayor a higscore se salta para actualizar el high score
+		jmp RETU 			;si no se cambia highscore, se sale
+	HISCORE:
+		mov bx, [score] 	;se mueve score a bx 
+		mov [hi_score], bx  ; se cambia highscore por score
+		call IMPRIME_HISCORE ; se imprime highscore
+	RETU:
+		ret
+	endp
+
+	;Procedimiento para aumentar la velocidad dependiendo de cuantos items se han consumido
+	SPEED_MAS proc 
+		inc [speed_conta] 			;se incrementa la cantidad de items comidos
+		mov bl, [speed_conta]		;se mueve a bl
+		cmp [cmp_conta], bl 		;se compara la variable comparadora con bl
+		je VELOCIDAD				;si son iguales se va a aumentar la velocidad
+		jmp RETUR
+	VELOCIDAD:
+		mov bl, [cmp_conta] 		;se le suma 10 al comparador, cada 10 items comidos va a subir la velocidad
+		add bl, 10d 
+		mov [cmp_conta], bl 		
+		mov bl, [speed] 			;se suma 10 a la velocidad
+	    add bl , 10d
+	    cmp bl, 100d				;si el valor de la velocidad es más grande que 100 se pasa a CIEN
+	    ja CIEN 
+	    mov [speed], bl 			;si no es más grande que 100, se le asigna ese valor a la velocidad
+	    call IMPRIME_SPEED 			;se imprime la velocidad
+	    jmp RETUR
+	CIEN: 
+		mov bl, 100d 				;si es más grande que 100 se le asigna 100 de todas maneras
+		mov [speed], bl 
+	RETUR:
+		ret 
+	endp
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;FIN PROCEDIMIENTOS;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	end inicio			;fin de etiqueta inicio, fin de programa
+	end inicio			;fin de etiqueta inicio, fin de programa 
