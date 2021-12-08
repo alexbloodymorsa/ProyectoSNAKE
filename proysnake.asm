@@ -111,6 +111,7 @@ tail_conta 		dw 		4  	;contador para la longitud de la cola
 ;variables para las coordenadas del objeto actual en pantalla
 item_col 		db 		50  	;columna
 item_ren 		db 		16 		;renglon
+dos 			db 		2
 
 ;Variables que sirven de parametros para el procedimiento IMPRIME_BOTON
 boton_caracter 	db 		0 		;caracter a imprimir
@@ -993,15 +994,19 @@ salir:				;inicia etiqueta salir
 	llamarITEM:
 		call CALCULO_ITEM	;se llama el procedimiento que calcula la nueva posicion del item
 		call IMPRIME_ITEM	;se imprime el item en una posición aleatoria
-		;mov tail[conta*2], 12
-		inc [tail_conta]
+		mov ax, tail_conta 	;Se pone el contador de la cola en ax
+		mul [dos] 			;Se multiplica para usarlo como índice
+		mov si, ax
+		mov [tail+si], 1d 	;La nueva posición es diferente de cero. Cuando se recorre la cola se termina de recorrer
+							;cuando el elemento es cero. Si deja de ser igual a cero se le asigna un valor y se imprime.
+		inc [tail_conta] 	;Nuevo valor de la cola
 		mov bx, [score] 	;se guarda el valor de score en bx para sumarle 10
 		add bx, 10d
 		mov [score], bx  	;se guarda el nuevo valor de score para imprimirlo 
 		call IMPRIME_SCORE  ;se llama el procedimiento que imprime al score
-		mov bx, hi_score	;se mueve el highscore a bx para compararlo
+		mov bx, [hi_score]	;se mueve el highscore a bx para compararlo
 		cmp bx, [score]		;se comparan ambos 
-		ja HISCORE 			;si score es mayor a higscore se salta para actualizar el high score
+		jb HISCORE 			;si score es mayor a higscore se salta para actualizar el high score
 		jmp RETU 			;si no se cambia highscore, se sale
 	HISCORE:
 		mov bx, [score] 	;se mueve score a bx 
