@@ -79,7 +79,7 @@ milisegundos 	dw 		0
 divisorCol		dw		58d		;Dato para calcular la columna aleatoria del item
 divisorRen		dw 		23d 	;Dato para calcular el renglón aleatorio del item
 
-flash			dw		0
+banStop			db		0
 
 ;Variables para el juego
 score 			dw 		0
@@ -335,6 +335,8 @@ no_mover:
 	mov ah,01h 				;Opción para leer el estado del buffer del teclado
     int 16h					;int 16h: servicios del teclado
     jz no_contenido			;Si hay contenido se lee la tecla de lo contrario se salta al siguiente proceso
+    cmp banStop, 1
+    je derecha		
     mov ah,00h 				;Opción para leer una tecla y almacenarla en al
     int 16h 				;int 16h: servicios del teclado
 
@@ -358,6 +360,12 @@ tecla_s:
 	cmp al, 115d 			;Tecla S
     jne no_contenido
     mov [head_dir],3 		;Si se presiona s se mueve hacia abajo
+    jmp no_contenido
+
+derecha:
+	mov [head_dir],0 		;Si se presiona d se mueve hacia la derecha
+	dec banStop
+
 no_contenido:
 
 
@@ -628,9 +636,6 @@ salir:				;inicia etiqueta salir
 
 	;Reinicia scores y speed, e imprime
 	DATOS_INICIALES proc
-		mov [score],0
-		mov [hi_score],0
-		mov [speed],0
 		call IMPRIME_SCORE
 		call IMPRIME_HISCORE
 		call IMPRIME_SPEED
@@ -910,27 +915,24 @@ salir:				;inicia etiqueta salir
 		cmp [head_dir], 0 					;Se compara para saber si la dirección es cero (derecha)
 		jne izq
 		inc [head_col] 						;Se incrementa uno el valor de la columna
-		call COMER_OBJ
 		jmp cuerpo
 	izq:
 		cmp [head_dir], 2 					;Se compara para saber si la dirección es dos (izquierda)
 		jne arriba
 		dec [head_col] 						;Se decrementa uno el valor de la columna
-		call COMER_OBJ
 		jmp cuerpo
 	arriba:
 		cmp [head_dir], 1 					;Se compara para saber si la dirección es uno (arriba)
 		jne abajo
 		dec [head_ren] 						;Se decrementa uno el valor del renglón
-		call COMER_OBJ
 		jmp cuerpo
 	abajo:									;Si no se cumple ninguna se mueve hacia abajo
 		inc [head_ren]						;Se incrementa uno el valor del renglón
-		call COMER_OBJ
 
 	;Se mueve el cuerpo de la cola. Se recorre el valor de la cola en una posición para que se tenga el valor
 	;de la posición pasada del elemento contiguo
-	cuerpo: 								
+	cuerpo: 
+		call COMER_OBJ								
 		lea bx,[tail] 						;se obtiene la posición de la cola para modificarla
 		mov cx,[bx] 						;Se guarda el valor de la primera posición
 	loop_tail2:
@@ -944,6 +946,7 @@ salir:				;inicia etiqueta salir
 		pop ax
 		mov [tail],ax 						;Se recupera el valor de la cabeza anterior y se le asigna al primer elemento de la cola
 
+		call COMER_MARCO
 		call IMPRIME_PLAYER 				;Se imprime el jugador con los valores actualizados
 		ret
 	endp
@@ -1008,6 +1011,9 @@ salir:				;inicia etiqueta salir
 		mov [tail+si], 1d 	;La nueva posición es diferente de cero. Cuando se recorre la cola se termina de recorrer
 							;cuando el elemento es cero. Si deja de ser igual a cero se le asigna un valor y se imprime.
 		inc [tail_conta] 	;Nuevo valor de la cola
+		inc [speed]
+		inc [speed]
+		call IMPRIME_SPEED
 		mov bx, [score] 	;se guarda el valor de score en bx para sumarle 10
 		add bx, 10d
 		mov [score], bx  	;se guarda el nuevo valor de score para imprimirlo 
@@ -1022,31 +1028,6 @@ salir:				;inicia etiqueta salir
 		call IMPRIME_HISCORE ; se imprime highscore
 	RETU:
 		ret
-	endp
-
-	;Procedimiento para aumentar la velocidad dependiendo de cuantos items se han consumido
-	SPEED_MAS proc 
-		inc [speed_conta] 			;se incrementa la cantidad de items comidos
-		mov bl, [speed_conta]		;se mueve a bl
-		cmp [cmp_conta], bl 		;se compara la variable comparadora con bl
-		je VELOCIDAD				;si son iguales se va a aumentar la velocidad
-		jmp RETUR
-	VELOCIDAD:
-		mov bl, [cmp_conta] 		;se le suma 10 al comparador, cada 10 items comidos va a subir la velocidad
-		add bl, 10d 
-		mov [cmp_conta], bl 		
-		mov bl, [speed] 			;se suma 10 a la velocidad
-	    add bl , 10d
-	    cmp bl, 100d				;si el valor de la velocidad es más grande que 100 se pasa a CIEN
-	    ja CIEN 
-	    mov [speed], bl 			;si no es más grande que 100, se le asigna ese valor a la velocidad
-	    call IMPRIME_SPEED 			;se imprime la velocidad
-	    jmp RETUR
-	CIEN: 
-		mov bl, 100d 				;si es más grande que 100 se le asigna 100 de todas maneras
-		mov [speed], bl 
-	RETUR:
-		ret 
 	endp
 
 	;Procedimiento para 
@@ -1076,6 +1057,7 @@ salir:				;inicia etiqueta salir
 		;call CALCULO_ITEM
 		;call IMPRIME_ITEM
 		call LIMPIAR_BUFFER
+		inc banStop
 
 		ret
 	endp
@@ -1101,12 +1083,14 @@ salir:				;inicia etiqueta salir
 		cmp di, 8
 		jne meter 
 
+		mov [tail_conta], 4
 		mov [score], 0
 		mov [speed], 0
 		mov [speed_indicador], 1000
 		mov [speed_conta], 0
 		mov [cmp_conta], 0
 		mov [status], 0
+		mov [head_dir],0
 	 	ret 
 	endp
 
@@ -1122,6 +1106,39 @@ salir:				;inicia etiqueta salir
     	ret 
     endp
 
+    ;&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    COMER_MARCO proc
+		cmp [head_ren],0
+		jne marco1
+		inc [head_ren]
+		call STOP
+		
+
+		marco1:
+		cmp [head_ren],24
+		jne marco2
+		dec [head_ren]
+		call STOP
+		
+
+		marco2:
+		cmp [head_col],20
+		jne marco3
+		inc [head_col]
+		call STOP
+		
+
+		marco3:
+		cmp [head_col],79
+		jne	final1
+		dec [head_col]
+		call STOP
+
+		final1:
+
+		ret
+	endp
+	;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;FIN PROCEDIMIENTOS;;;;;;
