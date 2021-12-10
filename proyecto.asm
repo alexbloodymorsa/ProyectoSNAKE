@@ -340,21 +340,29 @@ no_mover:
     mov ah,00h 				;Opción para leer una tecla y almacenarla en al
     int 16h 				;int 16h: servicios del teclado
 
+    cmp [head_dir], 0
+    je tecla_w
+    cmp [head_dir], 1
+    je tecla_d
+    cmp [head_dir], 2
+    je tecla_w
+
     ;Inicia la lógica para ver qué tecla se pulsó. Se compara el registro al con el valor ASCII de las teclas.
     ;Si no se aprieta a, s, d, o w no se hace nada.
+  tecla_d:
     cmp al, 100d 			;Tecla D
-    jne tecla_w
-    mov [head_dir],0 		;Si se presiona d se mueve hacia la derecha
-    jmp no_contenido
-tecla_w:
-	cmp al, 119d 			;Tecla W
     jne tecla_a
-    mov [head_dir],1 		;Si se presiona w se mueve hacia arriba
+    mov [head_dir],0 		;Si se presiona d se mueve hacia la derecha
     jmp no_contenido
 tecla_a:
 	cmp al, 97d 			;Tecla A
-    jne tecla_s
+    jne no_contenido
     mov [head_dir],2 		;Si se presiona a se mueve hacia la izquierda
+    jmp no_contenido
+tecla_w:
+	cmp al, 119d 			;Tecla W
+    jne tecla_s
+    mov [head_dir],1 		;Si se presiona w se mueve hacia arriba
     jmp no_contenido
 tecla_s:
 	cmp al, 115d 			;Tecla S
