@@ -58,7 +58,7 @@ area_controles_ancho 		equ 	20d
 ;Definicion de variables
 ;Títulos
 nameStr			db 		"SNAKE"
-recordStr 		db 		"HI-SCORE"
+recordStr 	db 		"HI-SCORE"
 scoreStr 		db 		"SCORE"
 levelStr 		db 		"LEVEL"
 speedStr 		db 		"SPEED"
@@ -67,27 +67,28 @@ speedStr 		db 		"SPEED"
 col_aux  		db 		0
 ren_aux 		db 		0
 
-conta 			db 		0 		;contador auxiliar
-tick_ms			dw 		55 		;55 ms por cada tick del sistema, esta variable se usa para operación de MUL convertir ticks a segundos
-mil				dw		1000 	;dato de valor decimal 1000 para operación DIV entre 1000
-diez 			dw 		10  	;dato de valor decimal 10 para operación DIV entre 10
-sesenta			db 		60 		;dato de valor decimal 60 para operación DIV entre 60
-status 			db 		0 		;0 stop-pause, 1 activo
-t_inicial 		dw 		0,0
+conta 			db 		0 			;contador auxiliar para el procedimiento STOP
+tick_ms			dw 		55 			;55 ms por cada tick del sistema, esta variable se usa para operación de MUL convertir ticks a segundos
+mil					dw		1000 		;dato de valor decimal 1000 para operación DIV entre 1000
+diez 				dw 		10  		;dato de valor decimal 10 para operación DIV entre 10
+dos 				db 		2 			;dato de valor decimal 2 para operación MUL por 2 y DIV entre 2
+sesenta			db 		60 			;dato de valor decimal 60 para operación DIV entre 60
+status 			db 		0 			;0 stop-pause, 1 activo
+t_inicial 	dw 		0,0 		
 milisegundos 	dw 		0
-;temp 			dw 		0
 divisorCol		dw		58d		;Dato para calcular la columna aleatoria del item
 divisorRen		dw 		23d 	;Dato para calcular el renglón aleatorio del item
 
-banStop			db		0
+flash				dw		0 			;Dato que guarda ticks del sistema utilzado para hacer que la serpiente parpadee
+banStop			db		0 			;Bandera que indica con 1 si acaba de pasar el procedimiento stop
 
 ;Variables para el juego
 score 			dw 		0
 hi_score	 	dw 		0
 speed 			db 		0
 speed_indicador	dw 		1000
-speed_conta		db 		0 		;contador de items comidos
-cmp_conta 		db 		10      ; comparador para el contador de items comidos
+speed_conta			db 		0 			;contador de items comidos
+cmp_conta 	db 				10      ; comparador para el contador de items comidos
 
 ;Variables para 'head'. Datos de la cabeza de la serpiente
 head_ren		db 		12d 	;Posición del renglón (0-24d)
@@ -113,13 +114,12 @@ tail_conta 		dw 		4  	;contador para la longitud de la cola
 ;variables para las coordenadas del objeto actual en pantalla
 item_col 		db 		50  	;columna
 item_ren 		db 		16 		;renglon
-dos 			db 		2
 
 ;Variables que sirven de parametros para el procedimiento IMPRIME_BOTON
 boton_caracter 	db 		0 		;caracter a imprimir
 boton_renglon 	db 		0 		;renglon de la posicion inicial del boton
 boton_columna 	db 		0 		;columna de la posicion inicial del boton
-boton_color		db 		0  		;color del caracter a imprimir dentro del boton
+boton_color			db 		0  		;color del caracter a imprimir dentro del boton
 boton_bg_color	db 		0 		;color del fondo del boton
 
 ;Auxiliar para calculo de coordenadas del mouse
@@ -272,14 +272,14 @@ leer_ticks macro
 	mov [t_inicial+2],cx
 endm
 
-;delimitar_cursor - No permite que el cursor salga del área de controles
+;delimitar_cursor - No permite que el mouse salga del área de controles
 delimitar_cursor macro
-	mov al, area_controles_ancho
-	mul [ocho]
-	mov dx, ax
-	mov cx, 0
-	mov ax, 0007h
-	int 33h
+	mov al, area_controles_ancho 		;Se guarda la columna límite del area de controles en AX
+	mul [ocho]											;Se multiplica AX por 8 para obtener las columnas en la correcta resolución
+	mov dx, ax 											;DX guarda la columna máxima que se puede acceder
+	mov cx, 0 											;CX guarda la columna mínima que se puede acceder
+	mov ax, 0007h 									;Opción 7 -> restrige el movimiento horizaontal del mouse desde CX hasta DX
+	int 33h													;llama interrupcion 33h para manejo del mouse
 endm
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
@@ -319,9 +319,9 @@ mouse_no_clic:
 ;Lee el mouse y avanza hasta que se haga clic en el boton izquierdo
 mouse:
 	cmp status, 0 			
-	je no_contenido 		;Si el status es 0 no se mueve al jugador
+	je no_contenido 		;Si el status es 0 (pausa) no se mueve al jugador
 	cmp status, 2
-	je status_stop
+	je status_stop 			;Si el status es 2 (stop) no se analizan botones y se hace un salto
 	call CALCULO_SPEED 		;Se calcula cada cuantos milisegundos se hace un movimiento
 	mov ax,[speed_indicador]
 	cmp milisegundos, ax 	;Mover cada [speed_indicador] milisegundos
@@ -335,49 +335,48 @@ no_mover:
 	mov ah,01h 				;Opción para leer el estado del buffer del teclado
     int 16h					;int 16h: servicios del teclado
     jz no_contenido			;Si hay contenido se lee la tecla de lo contrario se salta al siguiente proceso
-    cmp banStop, 1
-    je derecha		
+    cmp banStop, 1  ;Se verifica si se acaba de pasar por el procedimiento STOP
+    je derecha			;De ser así, se debe mover a la primero a la dercha la serpiente por lo que no se revisa la tecla presionada
     mov ah,00h 				;Opción para leer una tecla y almacenarla en al
     int 16h 				;int 16h: servicios del teclado
 
-    cmp [head_dir], 0
-    je tecla_w
+    cmp [head_dir], 0 		
+    je tecla_w 					;Si la serpiente se mueve a la derecha entonces solo puede ir verticalmente
     cmp [head_dir], 1
-    je tecla_d
+    je tecla_d 					;Si la serpiente se mueve a hacia arriba entonces solo puede ir horizontalmente
     cmp [head_dir], 2
-    je tecla_w
+    je tecla_w 					;Si la serpiente se mueve a la izquierda entonces solo puede ir verticalmente
 
     ;Inicia la lógica para ver qué tecla se pulsó. Se compara el registro al con el valor ASCII de las teclas.
-    ;Si no se aprieta a, s, d, o w no se hace nada.
+    ;Si no se aprieta A, S, D o W no se hace nada.
   tecla_d:
     cmp al, 100d 			;Tecla D
-    jne tecla_a
-    mov [head_dir],0 		;Si se presiona d se mueve hacia la derecha
+    jne tecla_a 			;Si no se presionó D se analiza A
+    mov [head_dir],0 		;Si se presiona D se mueve hacia la derecha
     jmp no_contenido
 tecla_a:
-	cmp al, 97d 			;Tecla A
-    jne no_contenido
-    mov [head_dir],2 		;Si se presiona a se mueve hacia la izquierda
-    jmp no_contenido
+		cmp al, 97d 			;Tecla A
+    jne no_contenido 	;Si no se presionó A no hace nada
+    mov [head_dir],2 		;Si se presiona A se mueve hacia la izquierda
+    jmp no_contenido	
 tecla_w:
-	cmp al, 119d 			;Tecla W
-    jne tecla_s
-    mov [head_dir],1 		;Si se presiona w se mueve hacia arriba
+		cmp al, 119d 			;Tecla W
+    jne tecla_s				;Si no se presionó W se analiza S
+    mov [head_dir],1 		;Si se presiona W se mueve hacia arriba
     jmp no_contenido
 tecla_s:
-	cmp al, 115d 			;Tecla S
-    jne no_contenido
-    mov [head_dir],3 		;Si se presiona s se mueve hacia abajo
+		cmp al, 115d 			;Tecla S
+    jne no_contenido	;Si no se presionó S no hace nada
+    mov [head_dir],3 		;Si se presiona S se mueve hacia abajo
     jmp no_contenido
 
-derecha:
-	mov [head_dir],0 		;Si se presiona d se mueve hacia la derecha
-	dec banStop
+derecha:							;En caso de ser el primer movimiento después del procedimiento STOP
+	mov [head_dir],0 		;se forza el movimiento hacia la dercha
+	dec banStop					;y la bandera vuleve a ser 0
 
 no_contenido:
-
-
 	lee_mouse
+
 conversion_mouse:
 	;Leer la posicion del mouse y hacer la conversion a resolucion
 	;80x25 (columnas x renglones) en modo texto
@@ -398,139 +397,107 @@ conversion_mouse:
 	test bx,0001h 		;Para revisar si el boton izquierdo del mouse fue presionado
 	jz mouse 			;Si el boton izquierdo no fue presionado, vuelve a leer el estado del mouse
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;Aqui va la lógica de la posicion del mouse;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	;Si el mouse fue presionado en el renglon 0
-	;se va a revisar si fue dentro del boton [X]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Lógica de la posicion del mouse;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Si el mouse fue presionado en el renglon 0, se va a revisar si fue dentro del boton [X]
 	cmp dx,0
-	je boton_x1
+	je boton_x
 
-	;Si el mouse fue presionado en el renglon 11, 12 o 13
-	;se revisa si fue dentro de los botones speed
+;Si el mouse fue presionado en el renglon 11, 12 o 13, se revisa si fue dentro de los botones speed
 	cmp dx,11
-	je boton_speed
+	je boton_sd
 	cmp dx,12
-	je boton_speed
+	je boton_sd
 	cmp dx,13
-	je boton_speed
+	je boton_sd
 
-	;Si el mouse fue presionado en el renglon 19, 20 o 21
-	;se revisa si fue dentro de los botones de estado
+;Si el mouse fue presionado en el renglon 19, 20 o 21, se revisa si fue dentro de los botones de estado
 	cmp dx,19
-	je boton_status
+	je boton_pausa
 	cmp dx,20
-	je boton_status
+	je boton_pausa
 	cmp dx,21
-	je boton_status
+	je boton_pausa
 
+;Si no se presionó en ninguno de los renglones con botones, se realiza otra vez los procesos del juego
 	jmp mouse_no_clic
+
 
 ;Lógica para revisar si el mouse fue presionado en [X]
 ;[X] se encuentra en renglon 0 y entre columnas 17 y 19
-boton_x1:
+boton_x:
 	cmp cx,17
-	jge boton_x2
-	jmp mouse_no_clic
-boton_x2:
+	jb mouse_no_clic
 	cmp cx,19
-	jbe boton_x3
-	jmp mouse_no_clic
-boton_x3:
+	ja mouse_no_clic
 	;Se cumplieron todas las condiciones
 	jmp salir
 
-;Lógica para revisar si el mouse fue presionado para modificar Speed
-boton_speed:
-	cmp [speed], 0 		;Si speed es 0 no se puede decrementar
-	je boton_su1 		;Se checa el botón de speed up
-	;jmp boton_sd1
 
-;Speed up se encuentra en renglon 11, 12, y 13 y entre columnas 12 y 14
-boton_sd1:
+;Lógica para revisar si el mouse fue presionado para modificar Speed
+;Speed down se encuentra en renglon 11, 12, y 13 y entre columnas 12 y 14
+boton_sd:
+	cmp [speed], 0 		;Si speed es 0 no se puede decrementar
+	je boton_su 		;Se checa el botón de speed up
+
 	cmp cx,12
-	jge boton_sd2
-	jmp boton_su1
-boton_sd2:
+	jb mouse_no_clic
 	cmp cx,14
-	jbe boton_sd3
-	jmp boton_su1
-boton_sd3:
+	ja boton_su
 	;Se cumplieron todas las condiciones se le resta uno a la velocidad y se actualiza
 	dec [speed]
 	call IMPRIME_SPEED
 	jmp mouse_no_clic
 
-	jmp boton_su1
-
 ;Speed up se encuentra en renglon 11, 12, y 13 y entre columnas 16 y 18
-boton_su1:
+boton_su:
 	cmp cx,16
-	jge boton_su2
-	jmp mouse_no_clic
-boton_su2:
+	jb mouse_no_clic
 	cmp cx,18
-	jbe boton_su3
-	jmp mouse_no_clic
-boton_su3:
+	ja mouse_no_clic
 	;Se cumplieron todas las condiciones se le suma uno a la velocidad y se actualiza
 	inc [speed]
 	call IMPRIME_SPEED
 	jmp mouse_no_clic
 
-boton_status:
-	jmp boton_pausa1
-	
+
+;Lógica para revisar si el mouse fue presionado en un boton de cambio de estado
 ;Pausa se encuentra en renglon 19, 20, y 21 y entre columnas 3 y 5
-boton_pausa1:
+boton_pausa:
 	cmp cx,3
-	jge boton_pausa2
-	jmp boton_stop1
-boton_pausa2:
+	jb mouse_no_clic
 	cmp cx,5
-	jbe boton_pausa3
-	jmp boton_stop1
-boton_pausa3:
+	ja boton_stop
 	;Se cumplieron todas las condiciones se cambia el estado a 0
 	mov [status], 0
 	jmp mouse_no_clic
 
-	jmp boton_stop1
-
 ;Stop se encuentra en renglon 19, 20, y 21 y entre columnas 9 y 11
-boton_stop1:
+boton_stop:
 	cmp cx,9
-	jge boton_stop2
-	jmp boton_play1
-boton_stop2:
+	jb mouse_no_clic
 	cmp cx,11
-	jbe boton_stop3
-	jmp boton_play1
-boton_stop3:
-	;Se cumplieron todas las condiciones se cambia el estado a 0
+	ja boton_play
+	;Se cumplieron todas las condiciones se cambia el estado a 2
 	mov [status], 2
 	jmp mouse_no_clic
 
-	jmp boton_play1
-
 ;Play se encuentra en renglon 19, 20, y 21 y entre columnas 15 y 17
-boton_play1:
+boton_play:
 	cmp cx,15
-	jge boton_play2
-	jmp mouse_no_clic
-boton_play2:
+	jb mouse_no_clic
 	cmp cx,17
-	jbe boton_play3
-	jmp mouse_no_clic
-boton_play3:
+	ja mouse_no_clic
 	;Se cumplieron todas las condiciones se cambia el estado a 1
 	mov [status], 1
-
 	jmp mouse_no_clic
 
+
+;Bloque que se realiza cuando se encuentra la serpiente en estado STOP
 status_stop:
-	call STOP 
-	jmp no_contenido
+	call STOP 					;Se llama procedimiento STOP y como su estado cambia a 0 (pausa)
+	jmp no_contenido 		;se hace el salto a no_contenido
 
 
 ;Si no se encontró el driver del mouse, muestra un mensaje y el usuario debe salir tecleando [enter]
@@ -890,8 +857,7 @@ salir:				;inicia etiqueta salir
 		mov ah,00h
 		int 1Ah
 
-		;Se recupera el valor de los ticks iniciales para poder hacer la diferencia entre
-		;el valor inicial y el último recuperado
+		;Se recupera el valor de los ticks iniciales para poder hacer la diferencia entre el valor inicial y el último recuperado
 		mov ax,[t_inicial]		;AX = parte baja de t_inicial
 		mov bx,[t_inicial+2]	;BX = parte alta de t_inicial
 		
@@ -918,44 +884,44 @@ salir:				;inicia etiqueta salir
 		call BORRA_PLAYER 					;Se borra la víbora del jugador
 
 		mov ah, [head_col] 					;Se obtiene el valor del renglón y columna de la serpiente
-		mov al, [head_ren]					;para que esa posición la tome el primer elemento de la cola.
-		push ax
+		mov al, [head_ren]					
+		push ax 										;y se guarda en la pila para que esa posición la tome el primer elemento de la cola
 		cmp [head_dir], 0 					;Se compara para saber si la dirección es cero (derecha)
 		jne izq
-		inc [head_col] 						;Se incrementa uno el valor de la columna
+		inc [head_col] 							;Si va a la derecha, se incrementa uno el valor de la columna
 		jmp cuerpo
 	izq:
 		cmp [head_dir], 2 					;Se compara para saber si la dirección es dos (izquierda)
 		jne arriba
-		dec [head_col] 						;Se decrementa uno el valor de la columna
+		dec [head_col] 							;Se decrementa uno el valor de la columna
 		jmp cuerpo
 	arriba:
 		cmp [head_dir], 1 					;Se compara para saber si la dirección es uno (arriba)
 		jne abajo
-		dec [head_ren] 						;Se decrementa uno el valor del renglón
+		dec [head_ren] 							;Se decrementa uno el valor del renglón
 		jmp cuerpo
-	abajo:									;Si no se cumple ninguna se mueve hacia abajo
+	abajo:											;Si no se cumple ninguna se mueve hacia abajo
 		inc [head_ren]						;Se incrementa uno el valor del renglón
 
 	;Se mueve el cuerpo de la cola. Se recorre el valor de la cola en una posición para que se tenga el valor
 	;de la posición pasada del elemento contiguo
 	cuerpo: 
-		call COMER_OBJ								
+		call COMER_OBJ						;Primero se analiza si en la posición actual se comió un objeto						
 		lea bx,[tail] 						;se obtiene la posición de la cola para modificarla
-		mov cx,[bx] 						;Se guarda el valor de la primera posición
+		mov cx,[bx] 							;Se guarda el valor de la primera posición
 	loop_tail2:
 		mov ax,[bx+2] 						;Se guarda el valor de la posicion contigua
 		mov [bx+2],cx 						;Se le asigna el valor viejo a la posición actual
-		mov cx, ax 							;Se actualiza el valor viejo
-		add bx,2 							;Se incrementa en dos la posición
-		cmp word ptr [bx+2],0 				;Se recorre hasta que haya un elemento de 0
+		mov cx, ax 								;Se actualiza el valor viejo
+		add bx,2 									;Se incrementa en dos la posición
+		cmp word ptr [bx+2],0 		;Se recorren las posiciones de la cola hasta que haya un elemento de 0
 		jne loop_tail2
 
 		pop ax
 		mov [tail],ax 						;Se recupera el valor de la cabeza anterior y se le asigna al primer elemento de la cola
 
-		call COMER_MARCO
-		call IMPRIME_PLAYER 				;Se imprime el jugador con los valores actualizados
+		call COMER_MARCO  				;Se analiza si en la posición actual no chocó con un marco
+		call IMPRIME_PLAYER 			;Se imprime la serpiente con los valores actualizados
 		ret
 	endp
 
@@ -976,29 +942,53 @@ salir:				;inicia etiqueta salir
 		ret
 	endp
 
+	;Proecedimiento para borrar el item actual
+	BORRA_ITEM proc
+		posiciona_cursor [item_ren],[item_col] 			;Posiciona el cursor en la columna y renglon del item
+		imprime_caracter_color 254,cNegro,bgNegro 		;Se imprime un caracter negro en su lugar
+		ret 
+	endp
+
 	;Procedimiento para calcular la posición aleatoria del item después de que la víbora se lo come
-	;Se utiliza el valor del tiempo del sistema y al dividirlo sobre un número, se utiliza el residuo
-	;se le suma una constante al residuo para obtener un número dentro de un rango de valores donde el
-	;mínimo es la constante sumada y el máximo es el divisor -1 + constante
+	;Se utiliza el valor del tiempo del sistema y al dividirlo sobre un número, se utiliza el residuo.
+	;Se le suma una constante al residuo para obtener un número dentro de un rango de valores donde el
+	;mínimo es la constante sumada y el máximo es el divisor - 1 + constante
 	CALCULO_ITEM proc
+	calculo:
 	;Se calcula la columna del item 
 		mov ax, 0
-		int 1Ah				;Opción AX=0 de la int 1Ah, obtiene los tics del tiempo del sistema en dx
-		mov ax, dx
-		xor dx, dx			;se cambia el valor de DX a 0 para mo afectar la división
+		int 1Ah						;Opción AX=0 de la int 1Ah, obtiene los tics del tiempo del sistema en dx
+		mov ax, dx				;se cambia el valor a AX para hacer la división
+		xor dx, dx				;se cambia el valor de DX a 0 para no afectar la división
 		div divisorCol		;DX = DX:AX % 58d => se obtiene un valor en DX de 0d a 57d
-		add dl, 21d 		;Se suma 21d a DL para obtener valores de [21d a 78d], que son las columnas disponibles
+		add dl, 21d 			;Se suma 21d a DL para obtener valores de [21d a 78d], que son las columnas disponibles
 		mov [item_col], dl 	;Se actualiza el valor de item_col
-	
-	;Se calcula el renglon del item
+	;Se calcula el renglon del item	
 		mov ax, 0
-		int 1Ah				;Opción AX=0 de la int 1Ah, obtiene los tics del tiempo del sistema en dx
-		mov ax, dx			
-		mov dx, 0000h		;se cambia el valor de DX a 0 para mo afectar la división
+		int 1Ah						;Opción AX=0 de la int 1Ah, obtiene los tics del tiempo del sistema en dx
+		mov ax, dx				;se cambia el valor a AX para hacer la división
+		xor dx, dx				;se cambia el valor de DX a 0 para mo afectar la división
 		div divisorRen		;DX = DX:AX % 23d => se obtiene un valor en DX de 0d a 22d
-		inc dl 				;Se suma 1d a DL para obtener valores de [1d a 23d], que son los renglones disponibles
-		mov [item_ren], dl 	;Se actualiza el valor de item_ren
+		inc dl 						;Se suma 1d a DL para obtener valores de [1d a 23d], que son los renglones disponibles
+		mov [item_ren], dl 	;Se actualiza el valor de item_col
 		
+		mov ah, [head_col] 
+		mov al, [head_ren]		;Se obtiene la posición de la cabeza en AX
+		mov bh, [item_col]
+		mov bl, [item_ren]		;Se obtiene la posición del objeto en BX
+		cmp ax, bx 						;Se compara si la cabeza y el objeto están en la misma posición
+		je calculo 						;Si es así, se hace un nuevo cálculo del objeto
+
+		mov ax, [tail] 				;Se obtiene la localidad 0 de la cola en AX
+		xor di, di 						;Se cambia el valor del indice di a 0
+		mov cx, tail_conta 		;CX = numero de elementos en la cola => para repetir el ciclo por cada elemento en la cola				
+	loop_tail3:
+		cmp [tail+di], bx 		;se compara la posición de ese elemento de a cola con la posición del item
+		je calculo  					;Si son iguales, se hace un nuevo cálculo del item
+		inc di
+		inc di 								;Si no son iguales, se suma 2 a di para comparar el siguiente elemento
+		loop loop_tail3
+
 		ret
 	endp
 
@@ -1007,146 +997,153 @@ salir:				;inicia etiqueta salir
 	COMER_OBJ proc 
 		mov bh, [item_col]	;se guardan los valores de la columna 
 		mov bl, [item_ren]	;y en el renglón del item en ambas partes del registro BX
-		xor bx, ax 			;se utiliza xor para comparar el valor de ax (posición de head) y bx (posicion item)
-		jz llamarITEM 		;si la bandera está encendida (son iguales) se salta a llamarITEM
-		jmp RETU 			;se salta al final en caso de que no se haya comido nada
+		xor bx, ax 					;se utiliza xor para comparar el valor de ax (posición de head) y bx (posicion item)
+		jz llamarITEM 			;si la bandera está encendida (son iguales) se salta a llamarITEM
+		jmp RETU 						;se salta al final en caso de que no se haya comido nada
 	llamarITEM:
-		call CALCULO_ITEM	;se llama el procedimiento que calcula la nueva posicion del item
-		call IMPRIME_ITEM	;se imprime el item en una posición aleatoria
+		call CALCULO_ITEM		;se llama el procedimiento que calcula la nueva posicion del item
+		call IMPRIME_ITEM		;se imprime el item en una posición aleatoria
 		mov ax, tail_conta 	;Se pone el contador de la cola en ax
-		mul [dos] 			;Se multiplica para usarlo como índice
+		mul [dos] 					;Se multiplica para usarlo como índice
 		mov si, ax
 		mov [tail+si], 1d 	;La nueva posición es diferente de cero. Cuando se recorre la cola se termina de recorrer
-							;cuando el elemento es cero. Si deja de ser igual a cero se le asigna un valor y se imprime.
-		inc [tail_conta] 	;Nuevo valor de la cola
+												;cuando el elemento es cero. Si deja de ser igual a cero se le asigna un valor y se imprime.
+		inc [tail_conta] 		;Nuevo valor de la cola
 		inc [speed]
 		inc [speed]
 		call IMPRIME_SPEED
-		mov bx, [score] 	;se guarda el valor de score en bx para sumarle 10
+		mov bx, [score] 		;se guarda el valor de score en bx para sumarle 10
 		add bx, 10d
-		mov [score], bx  	;se guarda el nuevo valor de score para imprimirlo 
+		mov [score], bx  		;se guarda el nuevo valor de score para imprimirlo 
 		call IMPRIME_SCORE  ;se llama el procedimiento que imprime al score
 		mov bx, [hi_score]	;se mueve el highscore a bx para compararlo
-		cmp bx, [score]		;se comparan ambos 
-		jb HISCORE 			;si score es mayor a higscore se salta para actualizar el high score
-		jmp RETU 			;si no se cambia highscore, se sale
+		cmp bx, [score]			;se comparan ambos 
+		jb HISCORE 					;si score es mayor a higscore se salta para actualizar el high score
+		jmp RETU 						;si no se cambia highscore, se sale
 	HISCORE:
-		mov bx, [score] 	;se mueve score a bx 
-		mov [hi_score], bx  ; se cambia highscore por score
-		call IMPRIME_HISCORE ; se imprime highscore
+		mov bx, [score] 		;se mueve score a bx 
+		mov [hi_score], bx  ;se cambia highscore por score
+		call IMPRIME_HISCORE 	;se imprime highscore
 	RETU:
+		
 		ret
 	endp
 
-	;Procedimiento para 
+	;Procedimiento para el estado de STOP
+	;Al pulsar STOP, la víbora se detiene, parpadea dos veces y se coloca en la posición inicial
+	;Los valores de speed y score se reinician y se debe picar play para que se mueva la víbora 
+	;Se utilizan los ticks del sistema para el parpadeo, hasta que pasen 5 ticks continúa el procedimiento
 	STOP proc 
-		;mov conta, 2d
+		mov conta, 4d 				;Se cambia el valor de conta a 4 para que la víbora parpadee dos veces
 
-	;dosflash:
-	;	call BORRA_PLAYER 					;Se borra la víbora del jugador
-	;	mov ah,00h 				;opción 0
-	;	int 1Ah 				;interrupción para leer el contador de ticks
-	;	mov flash, dx 			;se mueven los tics parte baja a CX para compararlos con flash
-	;esperar:
-	;	int 1Ah 				;interrupción para leer el contador de ticks
-	;	sub dx, flash
-	;	cmp dx, 10d 
-	;	jbe esperar
-	;	call IMPRIME_PLAYER
-	;	dec conta
-	;	cmp conta, 0
-	;	jne dosflash
+	desaparece:
+		call BORRA_PLAYER			;Se borra la vibora en la posición donde se detuvo o chocó
+		mov ax,0000h 					;opción 0
+		int 1Ah 							;interrupción para leer el contador de ticks
+		mov flash, dx 				;se mueven los tics parte baja a flash para compararlo despues
+		dec conta 						;se decrementa conta para saber que ya se borro la víbora
+		jmp esperar						
+	aparece:
+		call IMPRIME_PLAYER		;Se imprime la vibora en la posición donde se detuvo o chocó
+		mov ax,0000h					;opción 0
+		int 1Ah 							;interrupción para leer el contador de ticks
+		mov flash, dx 				;se mueven los tics parte baja a flash para compararlo despues
+		dec conta 						;se decrementa conta para saber que ya se imprimió la víbora
+	
+	;Los bloques aparece y desaparece siguen su flujo en este bloque donde esperan el tiempo necesario para volver a borrar o imprimir
+	esperar:
+		int 1Ah 							;interrupción para leer el contador de ticks
+		sub dx, flash					;Se le resta a los ticks nuevos, los ticks viejos (flash)
+		cmp dx, 5d 						;Se compara la resta con 5
+		jbe esperar						;Si es menor (no han pasado 5 ticks), se vuelve a obtener un tick y se compara
+		cmp conta, 0 					;Se compara si conta es 0, si lo es termina el parpadeo
+		je despues
+		mov al, conta 				;se mueve conta a AL para dividirlo sobre dos
+		div dos
+		cmp ah, 0 						;Si la división no residuo (conta es par), se debe borrar la víbora
+		je desaparece 
+		jmp aparece 					;Si la división genera residuo (conta es impar), se debe imprimir la víbora
 
+	despues: 								;una vez que acaba el parpadeo se reinician los datos
 		call BORRA_PLAYER
 		call REGRESA_DATOSIN
 		call IMPRIME_PLAYER
 		call IMPRIME_SCORE
 		call IMPRIME_SPEED
-		;call CALCULO_ITEM
-		;call IMPRIME_ITEM
-		call LIMPIAR_BUFFER
-		inc banStop
+		call BORRA_ITEM
+		call CALCULO_ITEM
+		call IMPRIME_ITEM
+		inc banStop 					;se activa la bandera para indicar que se acaba de realizar el procedimiento STOP
 
 		ret
 	endp
 
-	;Procedimiento para regresar a los valores de Head y Tail iniciales
+	;Procedimiento para regresar a los valores de Head, Tail, Score y Speed iniciales
+	;Se llama en el procedimiento STOP
 	REGRESA_DATOSIN proc
 		mov [head_ren], 12d
-		mov [head_col], 25d 
+		mov [head_col], 25d 	;se regresa la cabeza a la posición inicial
 	
-		mov cx, [tail_conta]
-		xor di, di
-	borrar:
+		mov cx, [tail_conta] 	;se utiliza el valor de tail_conta para recorrer cada posición de la cola
+		xor di, di 						;se vuelve 0 el indice para recorrer la cola
+	borrar: 								;todos los elementos de la cola se vuelven cero en el ciclo borrar
 		mov [tail+di], 0
 		add di, 2
 		loop borrar
 
-		xor di, di
-		mov ax, 1100000001100b
-	meter:
-		mov [tail+di], ax
-		sub ax, 0100h
-		add di, 2
-		cmp di, 8
+		xor di, di 						;se vuelve 0 el indice para recorrer la cola
+		mov ax, 1100000001100b	;se le asigna el valor del primer elemento de la cola a AX
+	meter:									;en este ciclo se le asignan los valores correspondientes a los 4 elementos inciales de la cola
+		mov [tail+di], ax 		;se le asigna el valor de AX a una posición de la cola
+		sub ax, 0100h					;se le resta 100h a AX (una columna menos)
+		add di, 2 						;aumenta el índice
+		cmp di, 8 						;se compara el índice a 8 (4 elementos de la cola) para salir del ciclo
 		jne meter 
 
-		mov [tail_conta], 4
+		;se regresan otras variables a su valor inicial
+		mov [tail_conta], 4 	
 		mov [score], 0
 		mov [speed], 0
 		mov [speed_indicador], 1000
 		mov [speed_conta], 0
 		mov [cmp_conta], 0
-		mov [status], 0
-		mov [head_dir],0
+		mov [status], 0 			;el estado cambia a 0 (pausa)
+		mov [head_dir],0 			;la dirección de la cabeza cambia a 0 (para la derecha)
 	 	ret 
 	endp
 
-	LIMPIAR_BUFFER proc
-	looplb:
-		mov ah,01h 				;Opción para leer el estado del buffer del teclado
-    	int 16h					;int 16h: servicios del teclado
-    	jz finlb				;Si hay contenido se lee la tecla de lo contrario se salta al siguiente proceso
-    	mov ah,00h 				;Opción para leer una tecla y almacenarla en al
-    	int 16h 				;int 16h: servicios del teclado
-    	jmp looplb
-    finlb:
-    	ret 
-    endp
-
-    ;&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-    COMER_MARCO proc
-		cmp [head_ren],0
+	;Procedimiento para identificar cuando la serpiente choca con el marco y se debe reinicar el juego
+  COMER_MARCO proc
+  	;Se compara si la cabeza toca el renglón 0 (marco superior)
+		cmp [head_ren], 0
 		jne marco1
-		inc [head_ren]
-		call STOP
-		
+		inc [head_ren]  	;para evitar borrar el marco, la cabeza se hace un renglón para abajo
+		call STOP 				;se llama el procedimiento STOP para recolocar la serpiente
 
+		;Se compara si la cabeza toca el renglón 24 (marco inferior)
 		marco1:
 		cmp [head_ren],24
 		jne marco2
-		dec [head_ren]
-		call STOP
-		
+		dec [head_ren]		;para evitar borrar el marco, la cabeza se hace un renglón para arriba
+		call STOP 				;se llama el procedimiento STOP para recolocar la serpiente
 
+		;Se compara si la cabeza toca la columna 20 (marco izquierdo)
 		marco2:
 		cmp [head_col],20
 		jne marco3
-		inc [head_col]
-		call STOP
-		
+		inc [head_col]		;para evitar borrar el marco, la cabeza se hace un renglón a la derecha
+		call STOP 				;se llama el procedimiento STOP para recolocar la serpiente
 
+		;Se compara si la cabeza toca la columna 79 (marco derecho)
 		marco3:
 		cmp [head_col],79
 		jne	final1
-		dec [head_col]
-		call STOP
+		dec [head_col] 		;para evitar borrar el marco, la cabeza se hace un renglón a la izquierda
+		call STOP 				;se llama el procedimiento STOP para recolocar la serpiente
 
-		final1:
-
+		final1:						;si no se toca ningun marco, el procedimiento no hace nada
 		ret
 	endp
-	;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;FIN PROCEDIMIENTOS;;;;;;
