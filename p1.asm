@@ -88,7 +88,6 @@ hi_score	 	dw 		0
 speed 			db 		0
 speed_indicador	dw 		1000
 speed_conta			db 		0 			;contador de items comidos
-cmp_conta 	db 				10      ; comparador para el contador de items comidos
 
 ;Variables para 'head'. Datos de la cabeza de la serpiente
 head_ren		db 		12d 	;Posición del renglón (0-24d)
@@ -1129,7 +1128,6 @@ salir:				;inicia etiqueta salir
 		mov [speed], 0
 		mov [speed_indicador], 1000
 		mov [speed_conta], 0
-		mov [cmp_conta], 0
 		mov [status], 0 			;el estado cambia a 0 (pausa)
 		mov [head_dir],0 			;la dirección de la cabeza cambia a 0 (para la derecha)
 	 	ret 
