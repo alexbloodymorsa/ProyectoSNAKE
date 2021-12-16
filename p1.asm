@@ -88,6 +88,7 @@ hi_score	 	dw 		0
 speed 			db 		0
 speed_indicador	dw 		1000
 speed_conta			db 		0 			;contador de items comidos
+bandera_speed  	db 		1 				;Bandera que indica cuándo se puede modificar la velocidad. Al inicio del juego se puede. 
 
 ;Variables para 'head'. Datos de la cabeza de la serpiente
 head_ren		db 		12d 	;Posición del renglón (0-24d)
@@ -437,8 +438,8 @@ boton_x:
 ;Lógica para revisar si el mouse fue presionado para modificar Speed
 ;Speed down se encuentra en renglon 11, 12, y 13 y entre columnas 12 y 14
 boton_sd:
-	cmp [status], 1
-	je mouse_no_clic 	;Si el estatus es play no se puede modificar la velocidad.
+	cmp [bandera_speed], 0
+	je mouse_no_clic 	;Si la bandera es falsa no se puede modificar la velocidad.
 	cmp [speed], 0 		;Si speed es 0 no se puede decrementar
 	je boton_su 		;Se checa el botón de speed up
 
@@ -492,6 +493,7 @@ boton_play:
 	ja mouse_no_clic
 	;Se cumplieron todas las condiciones se cambia el estado a 1
 	mov [status], 1
+	mov [bandera_speed],0 ;No se puede modificar la velocidad una vez que se da al play
 	jmp mouse_no_clic
 
 
@@ -1096,6 +1098,7 @@ salir:				;inicia etiqueta salir
 		call CALCULO_ITEM
 		call IMPRIME_ITEM
 		inc banStop 					;se activa la bandera para indicar que se acaba de realizar el procedimiento STOP
+		mov [bandera_speed], 1 			;Se puede modificar la speed en cada reinicio
 
 		ret
 	endp
