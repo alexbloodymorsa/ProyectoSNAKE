@@ -73,7 +73,7 @@ mil					dw		1000 		;dato de valor decimal 1000 para operación DIV entre 1000
 diez 				dw 		10  		;dato de valor decimal 10 para operación DIV entre 10
 dos 				db 		2 			;dato de valor decimal 2 para operación MUL por 2 y DIV entre 2
 sesenta			db 		60 			;dato de valor decimal 60 para operación DIV entre 60
-status 			db 		0 			;0 stop-pause, 1 activo
+status 			db 		0 			;0 pausa, 1 activo, 2 stop
 t_inicial 	dw 		0,0 		
 milisegundos 	dw 		0
 divisorCol		dw		58d		;Dato para calcular la columna aleatoria del item
@@ -340,7 +340,7 @@ no_mover:
     mov ah,00h 				;Opción para leer una tecla y almacenarla en al
     int 16h 				;int 16h: servicios del teclado
 
-    cmp [head_dir], 0 		
+	cmp [head_dir], 0 		
     je tecla_w 					;Si la serpiente se mueve a la derecha entonces solo puede ir verticalmente
     cmp [head_dir], 1
     je tecla_d 					;Si la serpiente se mueve a hacia arriba entonces solo puede ir horizontalmente
@@ -349,23 +349,23 @@ no_mover:
 
     ;Inicia la lógica para ver qué tecla se pulsó. Se compara el registro al con el valor ASCII de las teclas.
     ;Si no se aprieta A, S, D o W no se hace nada.
-  tecla_d:
+tecla_d:
     cmp al, 100d 			;Tecla D
     jne tecla_a 			;Si no se presionó D se analiza A
     mov [head_dir],0 		;Si se presiona D se mueve hacia la derecha
     jmp no_contenido
 tecla_a:
-		cmp al, 97d 			;Tecla A
+	cmp al, 97d 			;Tecla A
     jne no_contenido 	;Si no se presionó A no hace nada
     mov [head_dir],2 		;Si se presiona A se mueve hacia la izquierda
     jmp no_contenido	
 tecla_w:
-		cmp al, 119d 			;Tecla W
+	cmp al, 119d 			;Tecla W
     jne tecla_s				;Si no se presionó W se analiza S
     mov [head_dir],1 		;Si se presiona W se mueve hacia arriba
     jmp no_contenido
 tecla_s:
-		cmp al, 115d 			;Tecla S
+	cmp al, 115d 			;Tecla S
     jne no_contenido	;Si no se presionó S no hace nada
     mov [head_dir],3 		;Si se presiona S se mueve hacia abajo
     jmp no_contenido
@@ -438,6 +438,8 @@ boton_x:
 ;Lógica para revisar si el mouse fue presionado para modificar Speed
 ;Speed down se encuentra en renglon 11, 12, y 13 y entre columnas 12 y 14
 boton_sd:
+	cmp [status], 1
+	je mouse_no_clic 	;Si el estatus es play no se puede modificar la velocidad.
 	cmp [speed], 0 		;Si speed es 0 no se puede decrementar
 	je boton_su 		;Se checa el botón de speed up
 
@@ -917,6 +919,8 @@ salir:				;inicia etiqueta salir
 		cmp word ptr [bx+2],0 		;Se recorren las posiciones de la cola hasta que haya un elemento de 0
 		jne loop_tail2
 
+		call COMER_MISMA 				;Se comprueba que no se haya comido a sí misma
+
 		pop ax
 		mov [tail],ax 						;Se recupera el valor de la cabeza anterior y se le asigna al primer elemento de la cola
 
@@ -925,16 +929,35 @@ salir:				;inicia etiqueta salir
 		ret
 	endp
 
+
+	;Procedimiento que compara las posiciones del cuerpo con la posición anterior de la cabeza.
+	;Si alguna parte del cuerpo es igual a la de la cabeza se reinicia el juego con el estado STOP.
+	COMER_MISMA proc
+		lea bx,[tail] 						;se obtiene la posición de la cola para modificarla
+	loop_tail4:
+		mov ax,[bx] 						;Se guarda el valor de la posición actual
+		cmp ah,[head_col] 					;Si el valor de la columna coincide
+		jne siguiente
+		cmp al,[head_ren]					;Y el valor del renglón también
+		jne siguiente
+		mov [status],2 						;El status cambia a dos
+	siguiente: 								;De lo contrario sigue comparando
+		add bx,2 									;Se incrementa en dos la posición
+		cmp word ptr [bx],0 		;Se recorren las posiciones de la cola hasta que haya un elemento de 0
+		jne loop_tail4
+		ret
+	endp
+
 	;Procedimiento para calcular el indicador de la velocidad a partir del valor de speed
-	;El valor máximo de movimiento es de 1 segundo. Cada que se aumenta el valor de speed
-	;se le restan 10 milisegundos a dicho valor. El valor mínimo entre movimientos es de 10 milisegundos.
+	;El valor máximo de movimiento es de 300 milisegundos. Cada que se aumenta el valor de speed
+	;se le restan 3 milisegundos a dicho valor. El valor mínimo entre movimientos es de 3 milisegundos.
 	CALCULO_SPEED proc
 		;Se multiplica el valor de speed x10
 		mov al, [speed]
-		mov bl, 10
+		mov bl, 3
 		mul bl
-		;Se le resta a 1000 el valor de dicha multiplicación
-		mov bx, 1000
+		;Se le resta a 300 el valor de dicha multiplicación
+		mov bx, 300
 		sub bx, ax
 		;Ese valor es el nuevo indicador
 		mov [speed_indicador], bx
